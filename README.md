@@ -143,6 +143,56 @@ app.include_router(create_user_router, prefix="/api/v1")
 
 ---
 
+## Database & Migrations
+
+O projeto utiliza **SQLAlchemy** (ORM) e **Alembic** (Migrações) para gerenciar o banco de dados PostgreSQL.
+
+### O Fluxo de Migração
+
+Toda vez que você alterar um modelo (arquivo em `infrastructure/models/`), você deve criar uma migration para atualizar o banco.
+
+#### 1. Alterar o Modelo
+
+Edite ou crie um modelo em `infrastructure/models/`.
+Exemplo: Adicionar uma coluna `age` em `user.py`.
+
+```python
+age = Column(Integer, nullable=True)
+```
+
+#### 2. Gerar a Migration (Autogenerate)
+
+O Alembic compara seu código Python com o Banco de Dados atual e cria o script de mudança automaticamente.
+
+```bash
+docker-compose exec api alembic revision --autogenerate -m "descricao_da_mudanca"
+```
+
+> **Importante**: O arquivo será criado em `alembic/versions/` com um timestamp no nome (ex: `20251219_1630_add_age.py`).
+
+#### 3. Aplicar a Migration (Upgrade)
+
+Para efetivar a mudança no banco de dados:
+
+```bash
+docker-compose exec api alembic upgrade head
+```
+
+#### Comandos Úteis
+
+- **Verificar Status**: Mostra qual a versão atual do banco.
+
+  ```bash
+  docker-compose exec api alembic current
+  ```
+
+- **Desfazer Última Migration (Downgrade)**:
+  ```bash
+  docker-compose exec api alembic downgrade -1
+  ```
+
+---
+
 ## Docker & Deploy
 
 O projeto está totalmente dockerizado e pronto para deploy escalável.

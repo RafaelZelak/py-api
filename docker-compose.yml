@@ -8,8 +8,11 @@ services:
     restart: always
     environment:
       - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/app_db
     expose:
       - "8000"
+    volumes:
+      - ./:/app
     networks:
       - app-network
 
