@@ -64,81 +64,169 @@ Mantenha consistência entre nomes de arquivos, classes e funções.
 
 ---
 
-## Como Criar uma Nova Rota
+## Guia Completo: Criando uma Nova Feature
 
-Siga este fluxo para adicionar uma nova funcionalidade (ex: "Criar Usuário").
+Para garantir que o código continue limpo e escalável, siga este fluxo rigorosamente. Vamos usar como exemplo a criação de um **Produto**.
 
-### Passo 1: Application (Caso de Uso)
+### Passo 1: Domain (O "O Que")
 
-Crie o arquivo do caso de uso. O nome do arquivo deve refletir a ação.
+Comece pelo coração. Defina a **Entidade** (dados) e a **Interface do Repositório** (contrato).
+Aqui não entra banco de dados, nem frameworks, apenas Python puro.
 
-**Arquivo:** `application/create_user_use_case.py`
+**1.1 Entidade** (`domain/product.py`)
 
 ```python
-class CreateUserUseCase:
-    def execute(self, name: str, email: str) -> dict:
-        # Lógica de orquestração aqui
-        return {"id": 1, "name": name, "email": email}
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class Product:
+    id: Optional[int]
+    name: str
+    price: float
 ```
 
-### Passo 2: Transport (Schemas)
+**1.2 Interface do Repositório** (`domain/ports/product_repository.py`)
 
-Defina os contratos de entrada e saída.
+```python
+from abc import ABC, abstractmethod
+from domain.product import Product
 
-> **Por que usar Schemas?**
-> Para quem vem de um Python mais dinâmico, criar arquivos só para "tipar" pode parecer verboso. Mas em APIs robustas, isso é vital:
->
-> 1.  **Contrato de Interface**: Define exatamente o que entra e sai.
-> 2.  **Validação Automática**: Garante que os dados estão certos antes de chegarem na lógica.
-> 3.  **Documentação Automática**: Gera o Swagger/OpenAPI automaticamente.
-> 4.  **Segurança**: Evita vazamento de dados sensíveis no retorno.
+class ProductRepository(ABC):
+    @abstractmethod
+    def save(self, product: Product) -> Product:
+        pass
+```
 
-**Arquivo:** `transport/http/v1/schemas/create_user.py`
+---
+
+### Passo 2: Infrastructure (O "Como")
+
+Agora implemente a persistência real (Banco de Dados).
+
+**2.1 Modelo ORM** (`infrastructure/models/product.py`)
+Define como a tabela é no banco.
+
+```python
+from sqlalchemy import Column, Integer, String, Float
+from infrastructure.database import Base
+
+class ProductModel(Base):
+    __tablename__ = "products"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String)
+    price = Column(Float)
+```
+
+**2.2 Implementação do Repositório** (`infrastructure/repositories/product_repository.py`)
+Implementa a interface do Domain usando o SQLAlchemy.
+
+```python
+from sqlalchemy.orm import Session
+from domain.product import Product
+from domain.ports.product_repository import ProductRepository
+from infrastructure.models.product import ProductModel
+
+class SQLAlchemyProductRepository(ProductRepository):
+    def __init__(self, db: Session):
+        self.db = db
+
+    def save(self, product: Product) -> Product:
+        # Converte Domain -> Model
+        model = ProductModel(name=product.name, price=product.price)
+        self.db.add(model)
+        self.db.commit()
+        self.db.refresh(model)
+        # Retorna Model -> Domain
+        return Product(id=model.id, name=model.name, price=model.price)
+```
+
+---
+
+### Passo 3: Application (A Lógica)
+
+Crie o Caso de Uso. Ele orquestra a operação. Note que ele pede um `ProductRepository` (a interface), não a implementação concreta. Isso é **Inversão de Dependência**.
+
+**Arquivo:** `application/create_product_use_case.py`
+
+```python
+from domain.product import Product
+from domain.ports.product_repository import ProductRepository
+
+class CreateProductUseCase:
+    def __init__(self, repository: ProductRepository):
+        self.repository = repository
+
+    def execute(self, name: str, price: float) -> Product:
+        # Aqui entrariam validações de negócio (ex: preço não pode ser negativo)
+        if price < 0:
+            raise ValueError("Price cannot be negative")
+
+        product = Product(id=None, name=name, price=price)
+        return self.repository.save(product)
+```
+
+---
+
+### Passo 4: Transport (A API)
+
+Agora expomos isso para o mundo via HTTP.
+
+**4.1 Schemas (Contratos)** (`transport/http/v1/schemas/product.py`)
+Define o JSON de entrada e saída. Garante validação automática.
 
 ```python
 from pydantic import BaseModel
 
-class CreateUserRequest(BaseModel):
+class CreateProductRequest(BaseModel):
     name: str
-    email: str
+    price: float
 
-class CreateUserResponse(BaseModel):
+class ProductResponse(BaseModel):
     id: int
     name: str
-    email: str
+    price: float
 ```
 
-### Passo 3: Transport (Rota)
-
-Crie a rota isolada. Ela deve apenas converter HTTP para o Caso de Uso e vice-versa.
-
-**Arquivo:** `transport/http/v1/routes/create_user.py`
+**4.2 Rota** (`transport/http/v1/routes/products.py`)
+Conecta tudo: Recebe o Request -> Instancia o Repo -> Chama o UseCase -> Retorna o Response.
 
 ```python
-from fastapi import APIRouter
-from transport.http.v1.schemas.create_user import CreateUserRequest, CreateUserResponse
-from application.create_user_use_case import CreateUserUseCase
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from infrastructure.database import get_db
+from infrastructure.repositories.product_repository import SQLAlchemyProductRepository
+from application.create_product_use_case import CreateProductUseCase
+from transport.http.v1.schemas.product import CreateProductRequest, ProductResponse
 
 router = APIRouter()
 
-@router.post("/users", response_model=CreateUserResponse)
-def create_user(request: CreateUserRequest):
-    use_case = CreateUserUseCase()
-    result = use_case.execute(request.name, request.email)
-    return CreateUserResponse(**result)
+@router.post("/products", response_model=ProductResponse)
+def create_product(request: CreateProductRequest, db: Session = Depends(get_db)):
+    # 1. Prepara as dependências
+    repo = SQLAlchemyProductRepository(db)
+    use_case = CreateProductUseCase(repo)
+
+    # 2. Executa a lógica
+    try:
+        product = use_case.execute(request.name, request.price)
+        return product
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 ```
 
-### Passo 4: Registrar a Rota
+---
 
-Adicione a nova rota no arquivo principal.
+### Passo 5: Registrar (O Fim)
+
+Avise o FastAPI que essa rota existe.
 
 **Arquivo:** `main.py`
 
 ```python
-from transport.http.v1.routes.create_user import router as create_user_router
+from transport.http.v1.routes.products import router as products_router
 
-# ...
-app.include_router(create_user_router, prefix="/api/v1")
+app.include_router(products_router, prefix="/api/v1")
 ```
 
 ---
