@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from transport.http.v1.schemas.user import CreateUserRequest, UserResponse
-from application.create_user_use_case import CreateUserUseCase
-from application.delete_user_use_case import DeleteUserUseCase
+from application.users.create_user_use_case import CreateUserUseCase
+from application.users.delete_user_use_case import DeleteUserUseCase
 from infrastructure.repositories.user_repository import SQLAlchemyUserRepository
 from infrastructure.database import get_db
 

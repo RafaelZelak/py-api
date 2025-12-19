@@ -1,4 +1,8 @@
 from fastapi import FastAPI
+from core.logging import setup_logging
+from core.config import settings
+
+setup_logging()
 from transport.http.v1.routes.ping import router as ping_router
 from transport.http.v1.routes.echo import router as echo_router
 from transport.http.v1.routes.users import router as users_router

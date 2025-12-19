@@ -61,6 +61,7 @@ Mantenha consistência entre nomes de arquivos, classes e funções.
 - Cada arquivo deve ter **uma única responsabilidade**.
 - Cada rota deve ter seu próprio arquivo em `transport/http/v1/routes/`.
 - Cada caso de uso deve ter seu próprio arquivo em `application/`.
+- **Importante**: Se um domínio tiver mais de um caso de uso (ex: `create_user`, `delete_user`), agrupe-os em uma subpasta (ex: `application/users/`).
 
 ---
 
