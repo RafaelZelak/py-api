@@ -74,6 +74,8 @@ Para garantir que o código continue limpo e escalável, siga este fluxo rigoros
 Comece pelo coração. Defina a **Entidade** (dados) e a **Interface do Repositório** (contrato).
 Aqui não entra banco de dados, nem frameworks, apenas Python puro.
 
+> `Domain` serve apenas como um **manual do negócio**, ele diz quem são os elementos e como eles se comportam, sem NUNCA dizer **como** e nem manipular HTTP (APIs)
+
 **1.1 Entidade** (`domain/product.py`)
 
 ```python
@@ -86,6 +88,7 @@ class Product:
     name: str
     price: float
 ```
+> **Nota:** Pensando em Domínio, estamos modelando o conceito do negócio, no caso, *Product* ou seja, o campo `id` só passa a existir dentro do banco de dados, ele não é passado pelo usuário no payload da API, então, ele DEVE ser tratado como `Optional[int]`
 
 **1.2 Interface do Repositório** (`domain/ports/product_repository.py`)
 
@@ -98,6 +101,8 @@ class ProductRepository(ABC):
     def save(self, product: Product) -> Product:
         pass
 ```
+
+> **Nota:** Dentro do domínio, ainda temos o repositório, nele, indicamos as operaçẽos que poderão ser feitas no domínio criado, ou seja, se o domínio `Product` só tem o `abstractmethod` para *save* ele apenas irá salvar dados no banco, não poderá fazer consultas. Caso futuramente, precisasse adicionar novas operações de banco para esse domínio, basta adicionar novos `abstractmethod` para cada operação
 
 ---
 
@@ -118,6 +123,7 @@ class ProductModel(Base):
     name = Column(String)
     price = Column(Float)
 ```
+> **Nota:** Aqui é onde a tabela do banco de dados é declarada explicitamente: nomes de colunas, tipos, chaves primárias e constraints. Lembre-se: o **Modelo ORM** é um detalhe de implementação da infraestrutura. Ele serve para mapear o banco para o Python, mas não deve conter lógica de negócio. Se o banco mudar, o impacto morre aqui.
 
 **2.2 Implementação do Repositório** (`infrastructure/repositories/product_repository.py`)
 Implementa a interface do Domain usando o SQLAlchemy.
@@ -141,6 +147,8 @@ class SQLAlchemyProductRepository(ProductRepository):
         # Retorna Model -> Domain
         return Product(id=model.id, name=model.name, price=model.price)
 ```
+
+> **Nota:** O Repositório é o único momento em que o **Domínio** e o **ORM** se encontram, neste momento, o Repositório executa a ordem vinda do Domínio, ou seja, ele recebe um objeto puro de negócio e traduz para linguagem do banco (Model)
 
 ---
 
