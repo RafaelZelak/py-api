@@ -162,6 +162,7 @@ Crie o Caso de Uso. Ele orquestra a operação. Note que ele pede um `ProductRep
 ```python
 from domain.product import Product
 from domain.ports.product_repository import ProductRepository
+from core.exceptions import BusinessRuleViolationError
 
 class CreateProductUseCase:
     def __init__(self, repository: ProductRepository):
@@ -170,7 +171,7 @@ class CreateProductUseCase:
     def execute(self, name: str, price: float) -> Product:
         # Aqui entrariam validações de negócio (ex: preço não pode ser negativo)
         if price < 0:
-            raise ValueError("Price cannot be negative")
+            raise BusinessRuleViolationError("Price cannot be negative")
 
         product = Product(id=None, name=name, price=price)
         return self.repository.save(product)
@@ -206,7 +207,7 @@ class ProductResponse(BaseModel):
 Conecta tudo: Recebe o Request -> Instancia o Repo -> Chama o UseCase -> Retorna o Response.
 
 ```python
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from infrastructure.database import get_db
 from infrastructure.repositories.product_repository import SQLAlchemyProductRepository
@@ -222,11 +223,7 @@ def create_product(request: CreateProductRequest, db: Session = Depends(get_db))
     use_case = CreateProductUseCase(repo)
 
     # 2. Executa a lógica
-    try:
-        product = use_case.execute(request.name, request.price)
-        return product
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    return use_case.execute(request.name, request.price)
 ```
 
 > **Nota:** O `router` é o ponto de encontro de todas as camadas, aqui, chamamos as dependências e executa a lógica, mas, ela **nunca** deve conter lógica, neste momento apenas unimos tudo o que fizemos até então.
