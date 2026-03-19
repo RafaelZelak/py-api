@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from core.logging import setup_logging
-from core.config import settings
+from transport.http.error_handler import register_exception_handlers
 
 setup_logging()
 from transport.http.v1.routes.ping import router as ping_router
@@ -12,6 +12,8 @@ app = FastAPI(
     description="API structured with Clean Architecture principles",
     version="1.0.0"
 )
+
+register_exception_handlers(app)
 
 app.include_router(ping_router, prefix="/api/v1")
 app.include_router(echo_router, prefix="/api/v1")
